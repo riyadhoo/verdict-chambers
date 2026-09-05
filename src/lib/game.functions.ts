@@ -22,14 +22,17 @@ const ORDER: GameStatus[] = [
   "ENDED",
 ];
 
+export type Json = string | number | boolean | null | Json[] | { [key: string]: Json };
+
 export type EvidenceItem = {
   id: string;
   sort_order: number;
   locked: boolean;
+  adminOnlyLocked?: boolean;
   title?: string;
   type?: string;
   description?: string;
-  content?: Record<string, unknown>;
+  content?: Json;
 };
 
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -170,8 +173,6 @@ export const getGameView = createServerFn({ method: "POST" })
       .eq("game_id", game.id)
       .eq("removed", false)
       .order("juror_number");
-    const me = (players ?? []).find((p) => p.id && p.juror_number !== undefined) && null;
-    void me;
     const { data: mePlayer } = await db
       .from("players")
       .select("id, display_name, juror_number, ready, vote_submitted")
@@ -239,7 +240,7 @@ export const getGameView = createServerFn({ method: "POST" })
             title: e.title,
             type: e.type,
             description: e.description,
-            content: e.content as Record<string, unknown>,
+            content: e.content as Json,
           }
         : { id: e.id, sort_order: e.sort_order, locked: true };
     });
@@ -442,8 +443,13 @@ export const adminAction = createServerFn({ method: "POST" })
     const t = TRANSITIONS[data.action];
     if (!t) throw new Error("Unknown action.");
     if (t.from !== status) throw new Error(`Cannot go from ${status} to ${t.to}.`);
-    const patch: Record<string, unknown> = { status: t.to };
-    if (t.to === "BRIEFING") patch['started_at'] = new Date().toISOString();
-    await db.from("games").update(patch).eq("id", game.id);
+    await db
+      .from("games")
+      .update(
+        t.to === "BRIEFING"
+          ? { status: t.to, started_at: new Date().toISOString() }
+          : { status: t.to },
+      )
+      .eq("id", game.id);
     return { ok: true };
   });
