@@ -245,8 +245,19 @@ export const getGameView = createServerFn({ method: "POST" })
         : { id: e.id, sort_order: e.sort_order, locked: true };
     });
 
-    let witnesses: unknown[] = [];
-    let timeline: unknown[] = [];
+    let witnesses: {
+      id: string;
+      name: string;
+      role: string;
+      statement: string;
+      credibility_notes: string | null;
+    }[] = [];
+    let timeline: {
+      id: string;
+      ts_label: string;
+      description: string;
+      evidence_id: string | null;
+    }[] = [];
     if (showEvidence || isAdmin) {
       const { data: w } = await db
         .from("witnesses")
