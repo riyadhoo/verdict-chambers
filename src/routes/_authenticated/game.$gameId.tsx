@@ -3,7 +3,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { adminAction, getGameView, setReady, submitVote } from "@/lib/game.functions";
+import { adminAction, getGameView, setReady, submitVote, type Json } from "@/lib/game.functions";
 import { Button } from "@/components/ui/button";
 import { Chat } from "@/components/game/Chat";
 import { Notes } from "@/components/game/Notes";
@@ -425,6 +425,66 @@ function Field({ label, value }: { label: string; value: string }) {
     <div>
       <dt className="label-caps">{label}</dt>
       <dd className="text-sm">{value}</dd>
+    </div>
+  );
+}
+
+function isRecord(v: unknown): v is Record<string, Json> {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+
+function ExhibitContent({ content }: { content?: Json }) {
+  if (!isRecord(content) || Object.keys(content).length === 0) return null;
+  const entries = Object.entries(content).filter(
+    ([, v]) => typeof v === "string" && v.trim().length > 0,
+  ) as [string, string][];
+  if (entries.length === 0) return null;
+  return (
+    <dl className="mt-3 space-y-2 rounded border border-border bg-secondary/50 p-3">
+      {entries.map(([k, v]) => (
+        <div key={k}>
+          <dt className="label-caps">{k.replace(/_/g, " ")}</dt>
+          <dd className="text-sm leading-relaxed">{v}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+function Explanation({ data }: { data: Json }) {
+  if (!isRecord(data)) return null;
+  const text = (k: string) => (typeof data[k] === "string" ? (data[k] as string) : null);
+  const analysis = Array.isArray(data["evidence_analysis"])
+    ? (data["evidence_analysis"] as Json[]).filter(isRecord)
+    : [];
+  return (
+    <div className="space-y-4">
+      {[
+        ["What happened", text("what_happened")],
+        ["Key evidence", text("key_evidence")],
+        ["Why the other theory fails", text("why_alternative_failed")],
+        ["A note for the jury", text("jury_note")],
+      ]
+        .filter(([, v]) => v)
+        .map(([label, v]) => (
+          <div key={label as string}>
+            <p className="label-caps">{label}</p>
+            <p className="mt-1 text-sm leading-relaxed">{v}</p>
+          </div>
+        ))}
+      {analysis.length > 0 && (
+        <div>
+          <p className="label-caps">Exhibit by exhibit</p>
+          <div className="mt-2 space-y-2">
+            {analysis.map((a, i) => (
+              <div key={i} className="border-l-2 border-gold-dim pl-3">
+                <p className="text-sm text-gold">{String(a["title"] ?? "")}</p>
+                <p className="text-sm text-muted-foreground">{String(a["meaning"] ?? "")}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
