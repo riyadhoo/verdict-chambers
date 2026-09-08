@@ -433,7 +433,7 @@ function isRecord(v: unknown): v is Record<string, Json> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
 }
 
-function ExhibitContent({ content }: { content?: Json }) {
+function ExhibitContent({ content }: { content: Json | undefined }) {
   if (!isRecord(content) || Object.keys(content).length === 0) return null;
   const entries = Object.entries(content).filter(
     ([, v]) => typeof v === "string" && v.trim().length > 0,
