@@ -362,11 +362,7 @@ function GameScreen() {
                   </p>
                 </>
               )}
-              {secrets.explanation && (
-                <pre className="overflow-x-auto whitespace-pre-wrap rounded bg-secondary p-3 font-mono text-xs">
-                  {JSON.stringify(secrets.explanation, null, 2)}
-                </pre>
-              )}
+              {secrets.explanation && <Explanation data={secrets.explanation as Json} />}
             </section>
           )}
         </div>
