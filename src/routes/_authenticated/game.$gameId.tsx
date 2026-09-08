@@ -261,11 +261,8 @@ function GameScreen() {
                         )}
                       </div>
                       <p className="mt-2 text-sm text-muted-foreground">{e.description}</p>
-                      {e.content && Object.keys(e.content as object).length > 0 && (
-                        <pre className="mt-3 overflow-x-auto whitespace-pre-wrap rounded bg-secondary p-3 font-mono text-xs text-foreground">
-                          {JSON.stringify(e.content, null, 2)}
-                        </pre>
-                      )}
+                      <ExhibitContent content={e.content} />
+
                     </>
                   )}
                 </div>
