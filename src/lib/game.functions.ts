@@ -377,6 +377,62 @@ export const setReady = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+export const setAssessment = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { gameId: string; evidenceId: string; assessment: Assessment }) => d)
+  .handler(async ({ data, context }) => {
+    const db = await admin();
+    const { data: game } = await db
+      .from("games")
+      .select("id, status")
+      .eq("id", data.gameId)
+      .maybeSingle();
+    if (!game) throw new Error("Courtroom not found.");
+    const status = game.status as GameStatus;
+    if (ORDER.indexOf(status) > ORDER.indexOf("VOTING"))
+      throw new Error("Assessments are closed.");
+
+    const { data: player } = await db
+      .from("players")
+      .select("id")
+      .eq("game_id", data.gameId)
+      .eq("user_id", context.userId)
+      .eq("removed", false)
+      .maybeSingle();
+    if (!player) throw new Error("You are not on this jury.");
+
+    // Only released exhibits can be assessed.
+    const { data: ge } = await db
+      .from("game_evidence")
+      .select("released")
+      .eq("game_id", data.gameId)
+      .eq("evidence_id", data.evidenceId)
+      .maybeSingle();
+    if (!ge?.released) throw new Error("That exhibit is still sealed.");
+
+    const { data: existing } = await db
+      .from("evidence_assessments")
+      .select("id")
+      .eq("game_id", data.gameId)
+      .eq("player_id", player.id)
+      .eq("evidence_id", data.evidenceId)
+      .maybeSingle();
+    if (existing) {
+      await db
+        .from("evidence_assessments")
+        .update({ assessment: data.assessment })
+        .eq("id", existing.id);
+    } else {
+      await db.from("evidence_assessments").insert({
+        game_id: data.gameId,
+        player_id: player.id,
+        evidence_id: data.evidenceId,
+        assessment: data.assessment,
+      });
+    }
+    return { ok: true };
+  });
+
 export const submitVote = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { gameId: string; vote: "GUILTY" | "NOT_GUILTY" }) => d)
