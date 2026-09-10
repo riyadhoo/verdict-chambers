@@ -233,6 +233,18 @@ export const getGameView = createServerFn({ method: "POST" })
       .order("sort_order");
 
     const showEvidence = phaseIndex >= ORDER.indexOf("EVIDENCE");
+
+    // Only the requesting juror's own assessments are ever loaded.
+    const myAssessments = new Map<string, Assessment>();
+    if (mePlayer) {
+      const { data: mine } = await db
+        .from("evidence_assessments")
+        .select("evidence_id, assessment")
+        .eq("game_id", game.id)
+        .eq("player_id", mePlayer.id);
+      for (const a of mine ?? []) myAssessments.set(a.evidence_id, a.assessment as Assessment);
+    }
+
     const evidence: EvidenceItem[] = (allEv ?? []).map((e) => {
       const open = (releasedIds.has(e.id) && showEvidence) || isAdmin;
       return open
@@ -245,6 +257,7 @@ export const getGameView = createServerFn({ method: "POST" })
             type: e.type,
             description: e.description,
             content: e.content as Json,
+            myAssessment: myAssessments.get(e.id) ?? null,
           }
         : { id: e.id, sort_order: e.sort_order, locked: true };
     });
@@ -279,17 +292,19 @@ export const getGameView = createServerFn({ method: "POST" })
       );
     }
 
-    let tally: { guilty: number; notGuilty: number; submitted: number } | null = null;
-    if (isAdmin || phaseIndex >= ORDER.indexOf("REVEAL")) {
-      const { data: votes } = await db.from("votes").select("vote").eq("game_id", game.id);
-      tally = {
-        guilty: (votes ?? []).filter((v) => v.vote === "GUILTY").length,
-        notGuilty: (votes ?? []).filter((v) => v.vote === "NOT_GUILTY").length,
-        submitted: (votes ?? []).length,
-      };
-    }
-
     const revealed = phaseIndex >= ORDER.indexOf("REVEAL");
+
+    // Split totals from the mere count: nobody, not even the Game Master,
+    // sees guilty/not-guilty numbers before the reveal.
+    const { data: votes } = await db.from("votes").select("vote").eq("game_id", game.id);
+    const tally = revealed
+      ? {
+          guilty: (votes ?? []).filter((v) => v.vote === "GUILTY").length,
+          notGuilty: (votes ?? []).filter((v) => v.vote === "NOT_GUILTY").length,
+          submitted: (votes ?? []).length,
+        }
+      : null;
+    const votesSubmitted = (votes ?? []).length;
     const secrets =
       isAdmin || revealed
         ? {
