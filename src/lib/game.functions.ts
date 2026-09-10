@@ -350,7 +350,15 @@ export const getGameView = createServerFn({ method: "POST" })
       timeline,
       lockedCount: evidence.filter((e) => e.locked).length,
       players: players ?? [],
-      tally: isAdmin || revealed ? tally : null,
+      counts: {
+        jurors: (players ?? []).length,
+        ready: (players ?? []).filter((p) => p.ready).length,
+        votesSubmitted,
+        evidenceTotal: (allEv ?? []).length,
+        evidenceReleased: releasedIds.size,
+      },
+      difficulty: kase!.difficulty as string,
+      tally,
       secrets,
       results,
     };
