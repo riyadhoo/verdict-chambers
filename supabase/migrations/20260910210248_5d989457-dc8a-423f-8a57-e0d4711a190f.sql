@@ -1,0 +1,12 @@
+CREATE INDEX IF NOT EXISTS idx_players_game ON public.players(game_id);
+CREATE INDEX IF NOT EXISTS idx_players_user ON public.players(user_id);
+CREATE INDEX IF NOT EXISTS idx_chat_game_created ON public.chat_messages(game_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_votes_game ON public.votes(game_id);
+CREATE INDEX IF NOT EXISTS idx_evidence_case ON public.evidence(case_id, sort_order);
+CREATE INDEX IF NOT EXISTS idx_witnesses_case ON public.witnesses(case_id, sort_order);
+CREATE INDEX IF NOT EXISTS idx_timeline_case ON public.timeline_events(case_id, sort_order);
+CREATE INDEX IF NOT EXISTS idx_assessments_game_player ON public.evidence_assessments(game_id, player_id);
+CREATE INDEX IF NOT EXISTS idx_notes_game ON public.notes(game_id);
+CREATE INDEX IF NOT EXISTS idx_game_evidence_game ON public.game_evidence(game_id);
+CREATE INDEX IF NOT EXISTS idx_games_case ON public.games(case_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_games_room_code_ci ON public.games(upper(room_code));
