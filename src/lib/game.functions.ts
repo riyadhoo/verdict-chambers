@@ -24,6 +24,8 @@ const ORDER: GameStatus[] = [
 
 export type Json = string | number | boolean | null | Json[] | { [key: string]: Json };
 
+export type Assessment = "GUILTY" | "NOT_GUILTY" | "NEUTRAL";
+
 export type EvidenceItem = {
   id: string;
   sort_order: number;
@@ -33,9 +35,11 @@ export type EvidenceItem = {
   type?: string;
   description?: string;
   content?: Json;
+  myAssessment?: Assessment | null;
 };
 
-const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+// No O/0, I/1, S/5 — these are easily confused when read aloud.
+const CODE_ALPHABET = "ABCDEFGHJKLMNPQRTUVWXYZ234679";
 
 function makeCode() {
   let out = "";
@@ -229,6 +233,18 @@ export const getGameView = createServerFn({ method: "POST" })
       .order("sort_order");
 
     const showEvidence = phaseIndex >= ORDER.indexOf("EVIDENCE");
+
+    // Only the requesting juror's own assessments are ever loaded.
+    const myAssessments = new Map<string, Assessment>();
+    if (mePlayer) {
+      const { data: mine } = await db
+        .from("evidence_assessments")
+        .select("evidence_id, assessment")
+        .eq("game_id", game.id)
+        .eq("player_id", mePlayer.id);
+      for (const a of mine ?? []) myAssessments.set(a.evidence_id, a.assessment as Assessment);
+    }
+
     const evidence: EvidenceItem[] = (allEv ?? []).map((e) => {
       const open = (releasedIds.has(e.id) && showEvidence) || isAdmin;
       return open
@@ -241,6 +257,7 @@ export const getGameView = createServerFn({ method: "POST" })
             type: e.type,
             description: e.description,
             content: e.content as Json,
+            myAssessment: myAssessments.get(e.id) ?? null,
           }
         : { id: e.id, sort_order: e.sort_order, locked: true };
     });
@@ -275,17 +292,19 @@ export const getGameView = createServerFn({ method: "POST" })
       );
     }
 
-    let tally: { guilty: number; notGuilty: number; submitted: number } | null = null;
-    if (isAdmin || phaseIndex >= ORDER.indexOf("REVEAL")) {
-      const { data: votes } = await db.from("votes").select("vote").eq("game_id", game.id);
-      tally = {
-        guilty: (votes ?? []).filter((v) => v.vote === "GUILTY").length,
-        notGuilty: (votes ?? []).filter((v) => v.vote === "NOT_GUILTY").length,
-        submitted: (votes ?? []).length,
-      };
-    }
-
     const revealed = phaseIndex >= ORDER.indexOf("REVEAL");
+
+    // Split totals from the mere count: nobody, not even the Game Master,
+    // sees guilty/not-guilty numbers before the reveal.
+    const { data: votes } = await db.from("votes").select("vote").eq("game_id", game.id);
+    const tally = revealed
+      ? {
+          guilty: (votes ?? []).filter((v) => v.vote === "GUILTY").length,
+          notGuilty: (votes ?? []).filter((v) => v.vote === "NOT_GUILTY").length,
+          submitted: (votes ?? []).length,
+        }
+      : null;
+    const votesSubmitted = (votes ?? []).length;
     const secrets =
       isAdmin || revealed
         ? {
@@ -331,7 +350,15 @@ export const getGameView = createServerFn({ method: "POST" })
       timeline,
       lockedCount: evidence.filter((e) => e.locked).length,
       players: players ?? [],
-      tally: isAdmin || revealed ? tally : null,
+      counts: {
+        jurors: (players ?? []).length,
+        ready: (players ?? []).filter((p) => p.ready).length,
+        votesSubmitted,
+        evidenceTotal: (allEv ?? []).length,
+        evidenceReleased: releasedIds.size,
+      },
+      difficulty: kase!.difficulty as string,
+      tally,
       secrets,
       results,
     };
@@ -347,6 +374,62 @@ export const setReady = createServerFn({ method: "POST" })
       .update({ ready: data.ready })
       .eq("game_id", data.gameId)
       .eq("user_id", context.userId);
+    return { ok: true };
+  });
+
+export const setAssessment = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { gameId: string; evidenceId: string; assessment: Assessment }) => d)
+  .handler(async ({ data, context }) => {
+    const db = await admin();
+    const { data: game } = await db
+      .from("games")
+      .select("id, status")
+      .eq("id", data.gameId)
+      .maybeSingle();
+    if (!game) throw new Error("Courtroom not found.");
+    const status = game.status as GameStatus;
+    if (ORDER.indexOf(status) > ORDER.indexOf("VOTING"))
+      throw new Error("Assessments are closed.");
+
+    const { data: player } = await db
+      .from("players")
+      .select("id")
+      .eq("game_id", data.gameId)
+      .eq("user_id", context.userId)
+      .eq("removed", false)
+      .maybeSingle();
+    if (!player) throw new Error("You are not on this jury.");
+
+    // Only released exhibits can be assessed.
+    const { data: ge } = await db
+      .from("game_evidence")
+      .select("released")
+      .eq("game_id", data.gameId)
+      .eq("evidence_id", data.evidenceId)
+      .maybeSingle();
+    if (!ge?.released) throw new Error("That exhibit is still sealed.");
+
+    const { data: existing } = await db
+      .from("evidence_assessments")
+      .select("id")
+      .eq("game_id", data.gameId)
+      .eq("player_id", player.id)
+      .eq("evidence_id", data.evidenceId)
+      .maybeSingle();
+    if (existing) {
+      await db
+        .from("evidence_assessments")
+        .update({ assessment: data.assessment })
+        .eq("id", existing.id);
+    } else {
+      await db.from("evidence_assessments").insert({
+        game_id: data.gameId,
+        player_id: player.id,
+        evidence_id: data.evidenceId,
+        assessment: data.assessment,
+      });
+    }
     return { ok: true };
   });
 
