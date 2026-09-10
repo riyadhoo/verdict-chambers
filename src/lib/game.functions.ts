@@ -39,7 +39,7 @@ export type EvidenceItem = {
 };
 
 // No O/0, I/1, S/5 — these are easily confused when read aloud.
-const CODE_ALPHABET = "ABCDEFGHJKLMNPQRTUVWXYZ23467989".replace(/(.)(?=.*\1)/g, "");
+const CODE_ALPHABET = "ABCDEFGHJKLMNPQRTUVWXYZ234679";
 
 function makeCode() {
   let out = "";
