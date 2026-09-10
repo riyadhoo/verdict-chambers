@@ -24,6 +24,8 @@ const ORDER: GameStatus[] = [
 
 export type Json = string | number | boolean | null | Json[] | { [key: string]: Json };
 
+export type Assessment = "GUILTY" | "NOT_GUILTY" | "NEUTRAL";
+
 export type EvidenceItem = {
   id: string;
   sort_order: number;
@@ -33,9 +35,11 @@ export type EvidenceItem = {
   type?: string;
   description?: string;
   content?: Json;
+  myAssessment?: Assessment | null;
 };
 
-const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+// No O/0, I/1, S/5 — these are easily confused when read aloud.
+const CODE_ALPHABET = "ABCDEFGHJKLMNPQRTUVWXYZ23467989".replace(/(.)(?=.*\1)/g, "");
 
 function makeCode() {
   let out = "";
